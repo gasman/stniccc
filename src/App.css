@@ -8,3 +8,6 @@ canvas {
     float: left;
     margin: 1em;
 }
+.viewer {
+    clear: both;
+}

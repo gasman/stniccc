@@ -1,3 +1,6 @@
+import polygonArea from 'area-polygon';
+import polygonClipping from 'polygon-clipping';
+
 class GlobalPalette {
     constructor() {
         this.colors = [];
@@ -61,6 +64,26 @@ class Polygon {
         ctx.lineWidth = 2 * scale;
         this.drawPath(ctx, scale, true);
         ctx.stroke();
+    }
+
+    getArea() {
+        return polygonArea(this.vertices.map(v => [v.x, v.y]));
+    }
+
+    overlap(other) {
+        const p1 = this.vertices.map(v => [v.x, v.y]);
+        const p2 = other.vertices.map(v => [v.x, v.y]);
+        const originalArea = Math.max(polygonArea(p1), polygonArea(p2));
+        if (originalArea === 0) return 0;
+        const intersection = polygonClipping.intersection([p1], [p2]);
+        let intersectionArea = 0;
+        intersection.forEach((multipoly) => {
+            multipoly.forEach((poly) => {
+                let area = polygonArea(poly);
+                intersectionArea += area;
+            })
+        })
+        return intersectionArea / originalArea;
     }
 }
 
@@ -151,6 +174,25 @@ class Frame {
                 poly.stroke(ctx, scale);
             }
         });
+    }
+
+    findClosestPoly(target) {
+        let bestIndex = null;
+        let bestScore = 0;
+        let nextBestScore = 0;
+        this.polygons.forEach((poly, i) => {
+            if (poly.color === target.color) {
+                let score = target.overlap(poly);
+                if (score > bestScore) {
+                    bestIndex = i;
+                    nextBestScore = bestScore;
+                    bestScore = score;
+                } else if (score > nextBestScore) {
+                    nextBestScore = score;
+                }
+            }
+        });
+        return [bestIndex, bestScore, nextBestScore];
     }
 }
 
