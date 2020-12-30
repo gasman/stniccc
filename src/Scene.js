@@ -21,6 +21,61 @@ class GlobalPalette {
     }
 }
 
+class PolyPathSet {
+    constructor() {
+        this.polyPaths = {};
+        this.polyPathIndexesByPoly = {};
+    }
+
+    getForPolygon(poly) {
+        if (poly.id in this.polyPathIndexesByPoly) {
+            return this.polyPaths[this.polyPathIndexesByPoly[poly.id]];
+        } else {
+            /* no path stored -> path consists of only this poly */
+            return [poly];
+        }
+    }
+
+    link(poly1, poly2) {
+        if (poly1.id === poly2.id) return;
+        const path1exists = poly1.id in this.polyPathIndexesByPoly;
+        const path2exists = poly2.id in this.polyPathIndexesByPoly;
+
+        if (path1exists && path2exists) {
+            /* move everything from path2 into path1 */
+            const path1id = this.polyPathIndexesByPoly[poly1.id];
+            const path2id = this.polyPathIndexesByPoly[poly2.id];
+            if (path1id === path2id) return;
+            const path1 = this.polyPaths[path1id];
+            const path2 = this.polyPaths[path2id];
+            path2.forEach((poly) => {
+                path1.push(poly);
+                this.polyPathIndexesByPoly[poly.id] = path1id;
+            });
+            /* path2id is no longer active */
+            delete this.polyPaths[path2id];
+        } else if (path1exists) {
+            /* add poly2 to path1 */
+            const path1id = this.polyPathIndexesByPoly[poly1.id];
+            const path1 = this.polyPaths[path1id];
+            path1.push(poly2)
+            this.polyPathIndexesByPoly[poly2.id] = path1id;
+        } else if (path2exists) {
+            /* add poly1 to path2 */
+            const path2id = this.polyPathIndexesByPoly[poly2.id];
+            const path2 = this.polyPaths[path2id];
+            path2.push(poly1)
+            this.polyPathIndexesByPoly[poly1.id] = path2id;
+        } else {
+            /* create new path consisting of poly1 and poly2 */
+            const path = [poly1, poly2];
+            this.polyPaths[poly1.id] = path;
+            this.polyPathIndexesByPoly[poly1.id] = poly1.id;
+            this.polyPathIndexesByPoly[poly2.id] = poly1.id;
+        }
+    }
+}
+
 class Color {
     constructor(packedValue, index) {
         this.index = index;
@@ -34,9 +89,12 @@ class Color {
 }
 
 class Polygon {
-    constructor(color, vertices) {
+    constructor(color, vertices, frameNumber, index) {
         this.color = color;
         this.vertices = vertices;
+        this.index = index;
+        this.frameNumber = frameNumber;
+        this.id = (frameNumber << 8) | index;
     }
 
     drawPath(ctx, scale, closed) {
@@ -161,7 +219,9 @@ class Frame {
                     }
                 }
             }
-            this.polygons.push(new Polygon(this.palette[paletteIndex], polygonVertices));
+            this.polygons.push(new Polygon(
+                this.palette[paletteIndex], polygonVertices, this.frameNumber, this.polygons.length
+            ));
         }
     }
 
@@ -200,6 +260,18 @@ class Scene {
     constructor(frames, palette) {
         this.frames = frames;
         this.palette = palette || new GlobalPalette();
+        this.polyPaths = new PolyPathSet();
+    }
+
+    matchFramePolys(frame1, frame2) {
+        frame1.polygons.forEach((poly1) => {
+            let [poly2Index, bestScore, nextBestScore] = frame2.findClosestPoly(poly1);
+            if (bestScore > 0.4 && nextBestScore < bestScore / 10) {
+                let poly2 = frame2.polygons[poly2Index];
+                this.polyPaths.link(poly1, poly2);
+            }
+        })
+        console.log(this.polyPaths.polyPaths);
     }
 
     static async fromURL(url) {

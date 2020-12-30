@@ -58,6 +58,21 @@ const PolyList = ({ frame, polyIndex, onChange }) => {
     );
 }
 
+const PolyPathSequence = ({ scene, poly, onChange }) => {
+    const polyPath = poly ? scene.polyPaths.getForPolygon(poly) : [];
+
+    return (
+        <div className="control">
+            <label htmlFor="polyPath">PolyPath</label><br/>
+            <select id="polyPath" size="20" value={poly?.id} onChange={onChange}>
+                {polyPath.map((otherPoly) => {
+                    return <option key={otherPoly.id} value={otherPoly.id}>fr {otherPoly.frameNumber} poly {otherPoly.index}, {otherPoly.vertices.length} vertices</option>
+                })}
+            </select>
+        </div>
+    );
+}
+
 const FrameVertexList = ({ frame, vertexIndex, onChange }) => {
     const vertices = frame ? frame.vertices : []
 
@@ -90,7 +105,7 @@ const App = () => {
 
     const overlap = poly1 && poly2 ? poly1.overlap(poly2) : null;
 
-    const match = () => {
+    const matchPoly = () => {
         if (!poly1) return;
         if (!frame2) return;
         let [index, score, nextBestScore] = frame2.findClosestPoly(poly1);
@@ -98,11 +113,23 @@ const App = () => {
         if (index !== null) setPolyIndex2(index);
     }
 
+    const matchFramePolys = () => {
+        if (!frame1) return;
+        if (!frame2) return;
+        scene.matchFramePolys(frame1, frame2);
+    }
+
+    const goToPolyId = (polyId) => {
+        setFrameNumber1(polyId >> 8);
+        setPolyIndex1(polyId & 0xff);
+    }
+
     return (
         <div className="App">
             <div className="toolbar">
                 <button onClick={() => Scene.fromURL('/scene1.bin').then(setScene)}>Load</button>
-                <button onClick={match}>Match</button>
+                <button onClick={matchPoly}>Match poly</button>
+                <button onClick={matchFramePolys}>Match frame polys</button>
             </div>
 
             <div className="viewer">
@@ -110,8 +137,8 @@ const App = () => {
                 <FrameList scene={scene} frameNumber={frameNumber1} onChange={(e) => {setFrameNumber1(e.target.value)}} />
                 <PolyList frame={frame1} polyIndex={polyIndex1} onChange={(e) => {setPolyIndex1(e.target.value)}} />
                 <FrameVertexList frame={frame1} />
-                <ColorList scene={scene} />
                 poly area: {polyArea1}
+                <PolyPathSequence scene={scene} poly={poly1} onChange={(e) => {goToPolyId(e.target.value)}} />
             </div>
 
             <div className="viewer">
@@ -120,7 +147,7 @@ const App = () => {
                 <PolyList frame={frame2} polyIndex={polyIndex2} onChange={(e) => {setPolyIndex2(e.target.value)}} />
                 <FrameVertexList frame={frame2} />
                 <ColorList scene={scene} />
-                poly area: {polyArea2}
+                poly area: {polyArea2}<br />
                 overlap: { overlap }
             </div>
         </div>
