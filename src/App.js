@@ -3,14 +3,14 @@ import React from 'react';
 import './App.css';
 import Scene from './Scene';
 
-const Canvas = ({ frame, scale, highlight }) => {
+const Canvas = ({ frame, scale, highlightPoly, highlightVertex }) => {
     const canvasRef = React.useRef(null);
 
     React.useEffect(() => {
         if (frame) {
             const canvas = canvasRef.current;
             const ctx = canvas.getContext('2d');
-            frame.draw(ctx, scale, parseInt(highlight, 10));
+            frame.draw(ctx, scale, parseInt(highlightPoly, 10), parseInt(highlightVertex, 10));
         }
     });
 
@@ -59,7 +59,7 @@ const PolyList = ({ frame, polyIndex, onChange }) => {
 }
 
 const PolyPathSequence = ({ scene, poly, onChange }) => {
-    const polyPath = poly ? scene.polyPaths.getForPolygon(poly) : [];
+    const polyPath = poly ? scene.polyPaths.getForItem(poly) : [];
 
     return (
         <div className="control">
@@ -73,12 +73,42 @@ const PolyPathSequence = ({ scene, poly, onChange }) => {
     );
 }
 
+const VertexPathSequence = ({ scene, vertex, onChange }) => {
+    const vertexPath = vertex ? scene.vertexPaths.getForItem(vertex) : [];
+
+    return (
+        <div className="control">
+            <label htmlFor="vertexPath">VertexPath</label><br/>
+            <select id="vertexPath" size="20" value={vertex?.id} onChange={onChange}>
+                {vertexPath.map((otherVertex) => {
+                    return <option key={otherVertex.id} value={otherVertex.id}>{otherVertex.id} ({otherVertex.x}, {otherVertex.y})</option>
+                })}
+            </select>
+        </div>
+    );
+}
+
 const FrameVertexList = ({ frame, vertexIndex, onChange }) => {
     const vertices = frame ? frame.vertices : []
 
     return (
         <div className="control">
-            <label htmlFor="polyList">Frame vertices: {vertices.length}</label><br/>
+            <label htmlFor="frameVertexList">Frame vertices: {vertices.length}</label><br/>
+            <select id="frameVertexList" size="20" value={vertexIndex} onChange={onChange}>
+                {vertices.map((vertex, index) => {
+                    return <option key={index} value={index}>{index}: {vertex.x}, {vertex.y}</option>
+                })}
+            </select>
+        </div>
+    );
+}
+
+const VertexList = ({ poly, vertexIndex, onChange }) => {
+    const vertices = poly ? poly.vertices : []
+
+    return (
+        <div className="control">
+            <label htmlFor="vertexList">Poly vertices: {vertices.length}</label><br/>
             <select id="vertexList" size="20" value={vertexIndex} onChange={onChange}>
                 {vertices.map((vertex, index) => {
                     return <option key={index} value={index}>{index}: {vertex.x}, {vertex.y}</option>
@@ -87,10 +117,12 @@ const FrameVertexList = ({ frame, vertexIndex, onChange }) => {
         </div>
     );
 }
+
 const App = () => {
     const [scene, setScene] = React.useState(new Scene([]));
     const [frameNumber1, setFrameNumber1] = React.useState(0);
     const [polyIndex1, setPolyIndex1] = React.useState(null);
+    const [vertexIndex1, setVertexIndex1] = React.useState(null);
 
     const [frameNumber2, setFrameNumber2] = React.useState(0);
     const [polyIndex2, setPolyIndex2] = React.useState(null);
@@ -114,14 +146,48 @@ const App = () => {
     }
 
     const matchFramePolys = () => {
-        if (!frame1) return;
-        if (!frame2) return;
-        scene.matchFramePolys(frame1, frame2);
+        for (let i = 0; i < scene.frames.length - 1; i++) {
+            scene.matchFramePolys(scene.frames[i], scene.frames[i+1]);
+        }
+
+        scene.polyPaths.sort();
+
+        let pathCount = 0;
+        let polyCount = 0;
+        for (let id in scene.polyPaths.paths) {
+            pathCount++;
+            polyCount += scene.polyPaths.paths[id].length;
+        }
+        console.log(
+            'Formed ' + pathCount + ' polypaths containing ' + polyCount +
+            ' total polys, out of ' + scene.getTotalPolyCount() + ' available polys'
+        );
+    }
+
+    const followVertices = () => {
+        scene.vertexPathsFromPolyPaths();
+
+        let pathCount = 0;
+        let vertexCount = 0;
+        for (let id in scene.vertexPaths.paths) {
+            pathCount++;
+            vertexCount += scene.vertexPaths.paths[id].length;
+        }
+        console.log(
+            'Formed ' + pathCount + ' vertex paths containing ' + vertexCount +
+            ' total vertices, out of ' + scene.getTotalVertexCount() + ' available vertices'
+        );
     }
 
     const goToPolyId = (polyId) => {
         setFrameNumber1(polyId >> 8);
         setPolyIndex1(polyId & 0xff);
+    }
+
+    let vertex1 = null;
+    if (poly1 !== null && vertexIndex1 !== null) {
+        const vertexData1 = poly1.vertices[vertexIndex1];
+        vertex1 = {x: vertexData1.x, y: vertexData1.y, id: (poly1.id << 8) | vertexIndex1};
     }
 
     return (
@@ -130,22 +196,25 @@ const App = () => {
                 <button onClick={() => Scene.fromURL('/scene1.bin').then(setScene)}>Load</button>
                 <button onClick={matchPoly}>Match poly</button>
                 <button onClick={matchFramePolys}>Match frame polys</button>
+                <button onClick={followVertices}>Follow vertices</button>
             </div>
 
             <div className="viewer">
-                <Canvas frame={frame1} highlight={polyIndex1} scale={2} />
+                <Canvas frame={frame1} highlightPoly={polyIndex1} highlightVertex={vertexIndex1} scale={2} />
                 <FrameList scene={scene} frameNumber={frameNumber1} onChange={(e) => {setFrameNumber1(e.target.value)}} />
                 <PolyList frame={frame1} polyIndex={polyIndex1} onChange={(e) => {setPolyIndex1(e.target.value)}} />
-                <FrameVertexList frame={frame1} />
+                {/* <FrameVertexList frame={frame1} /> */}
                 poly area: {polyArea1}
+                <VertexList poly={poly1} vertexIndex={vertexIndex1} onChange={(e) => {setVertexIndex1(e.target.value)}} />
                 <PolyPathSequence scene={scene} poly={poly1} onChange={(e) => {goToPolyId(e.target.value)}} />
+                <VertexPathSequence scene={scene} vertex={vertex1} />
             </div>
 
             <div className="viewer">
                 <Canvas frame={frame2} highlight={polyIndex2} scale={2} />
                 <FrameList scene={scene} frameNumber={frameNumber2} onChange={(e) => {setFrameNumber2(e.target.value)}} />
                 <PolyList frame={frame2} polyIndex={polyIndex2} onChange={(e) => {setPolyIndex2(e.target.value)}} />
-                <FrameVertexList frame={frame2} />
+                {/* <FrameVertexList frame={frame2} /> */}
                 <ColorList scene={scene} />
                 poly area: {polyArea2}<br />
                 overlap: { overlap }
