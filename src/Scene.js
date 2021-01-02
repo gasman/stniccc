@@ -308,6 +308,8 @@ class Scene {
     }
 
     vertexPathsFromPolyPaths() {
+        const conservativeMatching = false;
+
         for (let polyPathId in this.polyPaths.paths) {
             let polyPath = this.polyPaths.paths[polyPathId];
             for (let i = 1; i < polyPath.length; i++) {
@@ -326,34 +328,57 @@ class Scene {
                     continue;
                 }
 
-                let vertexMap = {};
-                let reverseMap = {};
-                poly0.vertices.forEach((vertex0, v0index) => {
-                    let bestDistance = null;
-                    let bestVertexIndex = null;
-                    poly1.vertices.forEach((vertex1, v1index) => {
-                        let distance = (vertex1.x - vertex0.x) ** 2 + (vertex1.y - vertex0.y) ** 2;
-                        if (bestDistance === null || distance < bestDistance) {
-                            bestDistance = distance;
-                            bestVertexIndex = v1index;
+                if (conservativeMatching) {
+                    /* only match if tracking each vertex in poly0 to its closest counterpart
+                    in poly1 produces a 1:1 mapping. It turns out that in cases where this
+                    succeeds, vertex indices ALWAYS match (i.e. poly0 index 1 maps to poly1 index 1 etc)
+                    and therefore we can reasonably assume that polygons always preserve vertex ordering
+                    between frames, regardless of what the proximity calculations say */
+                    let vertexMap = {};
+                    let reverseMap = {};
+                    let twistyPath = false;
+                    poly0.vertices.forEach((vertex0, v0index) => {
+                        let bestDistance = null;
+                        let bestVertexIndex = null;
+                        poly1.vertices.forEach((vertex1, v1index) => {
+                            let distance = (vertex1.x - vertex0.x) ** 2 + (vertex1.y - vertex0.y) ** 2;
+                            if (bestDistance === null || distance < bestDistance) {
+                                bestDistance = distance;
+                                bestVertexIndex = v1index;
+                            }
+                        })
+                        if (bestVertexIndex !== v0index) {
+                            twistyPath = true;
                         }
-                    })
                     vertexMap[v0index] = bestVertexIndex;
-                    reverseMap[bestVertexIndex] = v0index;
-                })
-                let reverseMapCount = 0;
-                for (let i in reverseMap) reverseMapCount++;
-                if (reverseMapCount === poly0.vertices.length) {
-                    /* unique mapping found for each vertex */
-                    for (let v0index in vertexMap) {
-                        let v0 = poly0.vertices[v0index];
-                        let v1index = vertexMap[v0index];
-                        let v1 = poly1.vertices[v1index];
+                        reverseMap[bestVertexIndex] = v0index;
+                    })
+                    let reverseMapCount = 0;
+                    for (let i in reverseMap) reverseMapCount++;
+                    if (reverseMapCount === poly0.vertices.length) {
+                        /* unique mapping found for each vertex */
+                        if (twistyPath) {
+                            console.log('twisty path found!', poly0, poly1, vertexMap);
+                        }
+                        for (let v0index in vertexMap) {
+                            let v0 = poly0.vertices[v0index];
+                            let v1index = vertexMap[v0index];
+                            let v1 = poly1.vertices[v1index];
+                            this.vertexPaths.link(
+                                {x: v0.x, y: v0.y, id: (poly0.id << 8) | v0index},
+                                {x: v1.x, y: v1.y, id: (poly1.id << 8) | v1index},
+                            )
+                        }
+                    }
+                } else {
+                    /* just trust the vertex indices to correspond */
+                    poly0.vertices.forEach((v0, v0index) => {
+                        let v1 = poly1.vertices[v0index];
                         this.vertexPaths.link(
                             {x: v0.x, y: v0.y, id: (poly0.id << 8) | v0index},
-                            {x: v1.x, y: v1.y, id: (poly1.id << 8) | v1index},
+                            {x: v1.x, y: v1.y, id: (poly1.id << 8) | v0index},
                         )
-                    }
+                    });
                 }
             }
         }

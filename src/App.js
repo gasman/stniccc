@@ -185,7 +185,7 @@ const App = () => {
     }
 
     let vertex1 = null;
-    if (poly1 !== null && vertexIndex1 !== null) {
+    if (poly1 && vertexIndex1 !== null) {
         const vertexData1 = poly1.vertices[vertexIndex1];
         vertex1 = {x: vertexData1.x, y: vertexData1.y, id: (poly1.id << 8) | vertexIndex1};
     }
