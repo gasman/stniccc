@@ -94,6 +94,14 @@ class Color {
     }
 }
 
+class Vertex {
+    constructor(x, y, frameIndex, polyIndex, vertexIndex) {
+        this.x = x;
+        this.y = y;
+        this.id = (frameIndex << 16) | (polyIndex << 8) | vertexIndex;
+    }
+}
+
 class Polygon {
     constructor(color, vertices, frameNumber, index) {
         this.color = color;
@@ -179,14 +187,13 @@ class Frame {
             }
         }
 
-        this.vertices = [];
-        const seenCoordinates = {};
+        const vertexLookup = [];
         if (isIndexed) {
             let vertexCount = this.data.getUint8(ptr++);
             for (let i = 0; i < vertexCount; i++) {
                 let x = this.data.getUint8(ptr++);
                 let y = this.data.getUint8(ptr++);
-                this.vertices.push({x, y});
+                vertexLookup.push({x, y});
             }
         }
 
@@ -214,19 +221,16 @@ class Frame {
             if (isIndexed) {
                 for (let i = 0; i < vertexCount; i++) {
                     let vertexIndex = this.data.getUint8(ptr++);
-                    polygonVertices.push(this.vertices[vertexIndex]);
+                    let {x, y} = vertexLookup[vertexIndex];
+                    let vertex = new Vertex(x, y, this.frameNumber, this.polygons.length, i);
+                    polygonVertices.push(vertex);
                 }
             } else {
                 for (let i = 0; i < vertexCount; i++) {
                     let x = this.data.getUint8(ptr++);
                     let y = this.data.getUint8(ptr++);
-                    let vertex = {x, y};
+                    let vertex = new Vertex(x, y, this.frameNumber, this.polygons.length, i);
                     polygonVertices.push(vertex);
-                    let coord = (y<<8) | x;
-                    if (!(coord in seenCoordinates)) {
-                        seenCoordinates[coord] = 1;
-                        this.vertices.push(vertex);
-                    }
                 }
             }
             this.polygons.push(new Polygon(
@@ -376,20 +380,14 @@ class Scene {
                             let v0 = poly0.vertices[v0index];
                             let v1index = vertexMap[v0index];
                             let v1 = poly1.vertices[v1index];
-                            this.vertexPaths.link(
-                                {x: v0.x, y: v0.y, id: (poly0.id << 8) | v0index},
-                                {x: v1.x, y: v1.y, id: (poly1.id << 8) | v1index},
-                            )
+                            this.vertexPaths.link(v0, v1);
                         }
                     }
                 } else {
                     /* just trust the vertex indices to correspond */
                     poly0.vertices.forEach((v0, v0index) => {
                         let v1 = poly1.vertices[v0index];
-                        this.vertexPaths.link(
-                            {x: v0.x, y: v0.y, id: (poly0.id << 8) | v0index},
-                            {x: v1.x, y: v1.y, id: (poly1.id << 8) | v0index},
-                        )
+                        this.vertexPaths.link(v0, v1);
                     });
                 }
             }
