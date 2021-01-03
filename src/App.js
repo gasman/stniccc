@@ -166,7 +166,10 @@ const App = () => {
 
     const followVertices = () => {
         scene.vertexPathsFromPolyPaths();
+        vertexPathStats();
+    }
 
+    const vertexPathStats = () => {
         let pathCount = 0;
         let vertexCount = 0;
         for (let id in scene.vertexPaths.paths) {
@@ -177,6 +180,11 @@ const App = () => {
             'Formed ' + pathCount + ' vertex paths containing ' + vertexCount +
             ' total vertices, out of ' + scene.getTotalVertexCount() + ' available vertices'
         );
+    }
+
+    const mergeVertexPaths = () => {
+        scene.mergeVertexPaths();
+        vertexPathStats();
     }
 
     const goToPolyId = (polyId) => {
@@ -197,6 +205,7 @@ const App = () => {
                 <button onClick={matchPoly}>Match poly</button>
                 <button onClick={matchFramePolys}>Match frame polys</button>
                 <button onClick={followVertices}>Follow vertices</button>
+                <button onClick={mergeVertexPaths}>Merge vertex paths</button>
             </div>
 
             <div className="viewer">

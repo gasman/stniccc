@@ -384,6 +384,45 @@ class Scene {
         }
     }
 
+    mergeVertexPaths() {
+        const coordinates = {};
+        const collisions = {};
+
+        for (let vertexPathId in this.vertexPaths.paths) {
+            let vertexPath = this.vertexPaths.paths[vertexPathId];
+            vertexPath.forEach((vertex) => {
+                let frame = vertex.id >> 16;
+                let coord = (frame << 16) | (vertex.y << 8) | vertex.x;
+                if (coord in coordinates) {
+                    coordinates[coord].forEach((otherPathId) => {
+                        let collisionId = otherPathId + ':' + vertexPathId;
+                        if (collisionId in collisions) {
+                            collisions[collisionId]++;
+                        } else {
+                            collisions[collisionId] = 1;
+                        }
+                    });
+                    coordinates[coord].push(vertexPathId);
+                } else {
+                    coordinates[coord] = [vertexPathId];
+                }
+            });
+        }
+        const merges = [];
+        for (let collisionId in collisions) {
+            if (collisions[collisionId] >= 5) {
+                let [path1, path2] = collisionId.split(':');
+                merges.push([
+                    this.vertexPaths.paths[path1][0],
+                    this.vertexPaths.paths[path2][0],
+                ])
+            }
+        };
+        merges.forEach(([v0, v1]) => {
+            this.vertexPaths.link(v0, v1);
+        })
+    }
+
     static async fromURL(url) {
         const response = await fetch('/scene1.bin');
         const sceneBuffer = await response.arrayBuffer();
