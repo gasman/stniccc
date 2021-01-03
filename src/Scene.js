@@ -251,6 +251,18 @@ class Frame {
         });
     }
 
+    showPathlessVertices(ctx, scale, scene) {
+        this.polygons.forEach((poly) => {
+            poly.vertices.forEach((v, vertexIndex) => {
+                let vertexId = (poly.id << 8) | vertexIndex;
+                if (!(vertexId in scene.vertexPaths.pathIndexesByItem)) {
+                    ctx.fillStyle = 'red';
+                    ctx.fillRect((v.x - 2) * scale, (v.y - 2) * scale, 4 * scale, 4 * scale);
+                }
+            });
+        });
+    }
+
     findClosestPoly(target) {
         let bestIndex = null;
         let bestScore = 0;

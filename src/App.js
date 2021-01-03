@@ -3,7 +3,7 @@ import React from 'react';
 import './App.css';
 import Scene from './Scene';
 
-const Canvas = ({ frame, scale, highlightPoly, highlightVertex }) => {
+const Canvas = ({ frame, scale, highlightPoly, highlightVertex, scene }) => {
     const canvasRef = React.useRef(null);
 
     React.useEffect(() => {
@@ -11,6 +11,7 @@ const Canvas = ({ frame, scale, highlightPoly, highlightVertex }) => {
             const canvas = canvasRef.current;
             const ctx = canvas.getContext('2d');
             frame.draw(ctx, scale, parseInt(highlightPoly, 10), parseInt(highlightVertex, 10));
+            frame.showPathlessVertices(ctx, scale, scene);
         }
     });
 
@@ -209,7 +210,7 @@ const App = () => {
             </div>
 
             <div className="viewer">
-                <Canvas frame={frame1} highlightPoly={polyIndex1} highlightVertex={vertexIndex1} scale={2} />
+                <Canvas frame={frame1} scene={scene} highlightPoly={polyIndex1} highlightVertex={vertexIndex1} scale={2} />
                 <FrameList scene={scene} frameNumber={frameNumber1} onChange={(e) => {setFrameNumber1(e.target.value)}} />
                 <PolyList frame={frame1} polyIndex={polyIndex1} onChange={(e) => {setPolyIndex1(e.target.value)}} />
                 {/* <FrameVertexList frame={frame1} /> */}
@@ -220,7 +221,7 @@ const App = () => {
             </div>
 
             <div className="viewer">
-                <Canvas frame={frame2} highlight={polyIndex2} scale={2} />
+                { /* <Canvas frame={frame2} scene={scene} highlight={polyIndex2} scale={2} /> */ }
                 <FrameList scene={scene} frameNumber={frameNumber2} onChange={(e) => {setFrameNumber2(e.target.value)}} />
                 <PolyList frame={frame2} polyIndex={polyIndex2} onChange={(e) => {setPolyIndex2(e.target.value)}} />
                 {/* <FrameVertexList frame={frame2} /> */}
