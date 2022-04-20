@@ -36,6 +36,15 @@ class PathSet {
         }
     }
 
+    getWithId(poly) {
+        if (poly.id in this.pathIndexesByItem) {
+            let pathId = this.pathIndexesByItem[poly.id];
+            return [pathId, this.paths[pathId]];
+        } else {
+            return [poly.id, [poly]];
+        }
+    }
+
     link(poly1, poly2) {
         if (poly1.id === poly2.id) return;
         const path1exists = poly1.id in this.pathIndexesByItem;
@@ -98,7 +107,12 @@ class Vertex {
     constructor(x, y, frameIndex, polyIndex, vertexIndex) {
         this.x = x;
         this.y = y;
+        this.coord = (y << 8) | x;
         this.id = (frameIndex << 16) | (polyIndex << 8) | vertexIndex;
+    }
+
+    isOnScreenEdge() {
+        return this.x === 0 || this.x === 255 || this.y === 0 || this.y === 199;
     }
 }
 
@@ -112,7 +126,7 @@ class Polygon {
     }
 
     isOnScreenEdge() {
-        return this.vertices.some((v) => v.x === 0 || v.x === 255 || v.y === 0 || v.y === 199);
+        return this.vertices.some((v) => v.isOnScreenEdge());
     }
 
     drawPath(ctx, scale, closed) {
@@ -198,6 +212,7 @@ class Frame {
         }
 
         this.polygons = [];
+        this.verticesByCoordinate = {};
         while (true) {
             let descriptor = this.data.getUint8(ptr++);
             if (descriptor === 0xff) {
@@ -224,6 +239,11 @@ class Frame {
                     let {x, y} = vertexLookup[vertexIndex];
                     let vertex = new Vertex(x, y, this.frameNumber, this.polygons.length, i);
                     polygonVertices.push(vertex);
+                    if (vertex.coord in this.verticesByCoordinate) {
+                        this.verticesByCoordinate[vertex.coord].push(vertex);
+                    } else {
+                        this.verticesByCoordinate[vertex.coord] = [vertex];
+                    }
                 }
             } else {
                 for (let i = 0; i < vertexCount; i++) {
@@ -231,6 +251,11 @@ class Frame {
                     let y = this.data.getUint8(ptr++);
                     let vertex = new Vertex(x, y, this.frameNumber, this.polygons.length, i);
                     polygonVertices.push(vertex);
+                    if (vertex.coord in this.verticesByCoordinate) {
+                        this.verticesByCoordinate[vertex.coord].push(vertex);
+                    } else {
+                        this.verticesByCoordinate[vertex.coord] = [vertex];
+                    }
                 }
             }
             this.polygons.push(new Polygon(
@@ -260,7 +285,7 @@ class Frame {
             poly.vertices.forEach((v, vertexIndex) => {
                 let vertexId = (poly.id << 8) | vertexIndex;
                 if (!(vertexId in scene.vertexPaths.pathIndexesByItem)) {
-                    ctx.fillStyle = 'red';
+                    ctx.fillStyle = 'rgba(255, 0, 0, 0.25)';
                     ctx.fillRect((v.x - 2) * scale, (v.y - 2) * scale, 4 * scale, 4 * scale);
                 }
             });
@@ -284,6 +309,50 @@ class Frame {
             }
         });
         return [bestIndex, bestScore, nextBestScore];
+    }
+
+    findVertexPathsByAlias(scene) {
+        /* for each poly in this frame, see which ones are in a polypath */
+        this.polygons.forEach((poly) => {
+            if (!(poly.id in scene.polyPaths.pathIndexesByItem)) return;
+            let polyPathId = scene.polyPaths.pathIndexesByItem[poly.id];
+
+            /* find vertices that are not on the screen edge */
+            poly.vertices.forEach((vertex) => {
+                if (vertex.isOnScreenEdge()) return;
+                /* does this vertex share coordinates with any others on this frame? */
+                let coincidents = this.verticesByCoordinate[vertex.coord];
+                if (coincidents.length > 1) {
+                    let currentVertexPath = scene.vertexPaths.getForItem(vertex);
+                    coincidents.forEach((otherVertex) => {
+                        /* skip otherVertex if it is the same as vertex, is not in a vertexPath,
+                        or is already in the same vertexPath as vertex */
+                        if (vertex === otherVertex) return;
+                        if (!(otherVertex.id in scene.vertexPaths.pathIndexesByItem)) return;
+                        let otherVertexPath = scene.vertexPaths.getForItem(otherVertex);
+                        if (otherVertexPath === currentVertexPath) return;
+
+                        /* does otherVertex's vertexPath share at least one vertex with this polypath? If so:
+                        - otherVertex (being from a different polygon) must have ended up on that vertexPath
+                        due to it being established as a shared vertex with the current polygon (over some
+                        other range of frames)
+                        - scene topology is static, so if two polygons sharing a vertex(Path) appear in the
+                        same frame, the coordinates must coincide
+                        - the current frame is such a frame, and since it's not possible for otherVertex to
+                        coincide with more than one vertex of the current polygon, the current vertex must
+                        be the shared one
+                        - therefore the current vertex belongs to that vertexPath too
+                        */
+                        if (otherVertexPath.some((candidateVertex) => {
+                            let candidatePolyId = candidateVertex.id >> 8;
+                            return (scene.polyPaths.pathIndexesByItem[candidatePolyId] === polyPathId);
+                        })) {
+                            scene.vertexPaths.link(vertex, otherVertex);
+                        }
+                    })
+                }
+            });
+        });
     }
 }
 
@@ -433,6 +502,12 @@ class Scene {
         })
     }
 
+    findVertexPathsByAlias() {
+        this.frames.forEach((frame) => {
+            frame.findVertexPathsByAlias(this);
+        });
+    }
+
     static async fromURL(url) {
         const response = await fetch('/scene1.bin');
         const sceneBuffer = await response.arrayBuffer();
@@ -459,4 +534,52 @@ class Scene {
     }
 }
 
-export default Scene;
+class Snapshot {
+    constructor(scene) {
+        this.vertices = [];
+        this.polygons = [];
+        this.frames = []
+
+        let verticesByPathId = {};
+        let polygonsByPathString = {};
+
+        scene.frames.forEach((frame, frameNumber) => {
+            this.frames[frameNumber] = [];
+
+            frame.polygons.forEach((poly) => {
+                let vpaths = [];
+                poly.vertices.forEach((vertex) => {
+                    let [vpathid, vpath] = scene.vertexPaths.getWithId(vertex);
+                    if (!(vpathid in verticesByPathId)) {
+                        let pathDict = {};
+                        vpath.forEach((v) => {
+                            pathDict[v.id >> 16] = [v.x, v.y];
+                        });
+                        verticesByPathId[vpathid] = this.vertices.length;
+                        this.vertices.push(pathDict);
+                    }
+                    vpaths.push(verticesByPathId[vpathid]);
+                });
+                let pathstring = poly.color.packedValue + ':' + vpaths.join(',');
+                if (!(pathstring in polygonsByPathString)) {
+                    polygonsByPathString[pathstring] = this.polygons.length;
+                    this.polygons.push({
+                        color: poly.color.packedValue,
+                        vertices: vpaths,
+                    });
+                }
+                this.frames[frameNumber].push(polygonsByPathString[pathstring]);
+            });
+        });
+    }
+
+    export() {
+        return {
+            vertices: this.vertices,
+            polygons: this.polygons,
+            frames: this.frames,
+        };
+    }
+}
+
+export {Scene, Snapshot};

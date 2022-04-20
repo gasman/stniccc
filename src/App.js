@@ -1,7 +1,7 @@
 import React from 'react';
 
 import './App.css';
-import Scene from './Scene';
+import { Scene, Snapshot } from './Scene';
 
 const Canvas = ({ frame, scale, highlightPoly, highlightVertex, scene }) => {
     const canvasRef = React.useRef(null);
@@ -188,6 +188,16 @@ const App = () => {
         vertexPathStats();
     }
 
+    const findVertexPathsByAlias = () => {
+        scene.findVertexPathsByAlias();
+        vertexPathStats();
+    }
+
+    const snapshot = () => {
+        const s = new Snapshot(scene);
+        console.log(JSON.stringify(s.export()));
+    }
+
     const goToPolyId = (polyId) => {
         setFrameNumber1(polyId >> 8);
         setPolyIndex1(polyId & 0xff);
@@ -207,6 +217,8 @@ const App = () => {
                 <button onClick={matchFramePolys}>Match frame polys</button>
                 <button onClick={followVertices}>Follow vertices</button>
                 <button onClick={mergeVertexPaths}>Merge vertex paths</button>
+                <button onClick={findVertexPathsByAlias}>Find vpaths by alias</button>
+                <button onClick={snapshot}>Snapshot</button>
             </div>
 
             <div className="viewer">
