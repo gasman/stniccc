@@ -1,3 +1,26 @@
+# stniccc
+
+An abortive attempt at processing [the 2D polygon data from STNICCC 2000](http://arsantica-online.com/st-niccc-competition/) into a coherent 3D scene, abandoned when [PICONICC](https://www.pouet.net/prod.php?which=87735) beat me to it.
+
+To run: `npm run start` then visit http://localhost:3000/ and open the JS console. Tested on Node 12.
+
+## Usage (as far as I can remember)
+
+Click 'Load' to load the scene data. This will let you browse through frames, and drill down to an individual polygon or vertex within a frame.
+
+A 'PolyPath' is a sequence of per-frame polygons that have been determined to all correspond to the same polygon of the 3D scene. A 'VertexPath' is the same, but for a vertex. On initial load, every polygon and vertex of every frame is in a single-element PolyPath / VertexPath of its own. The goal is to merge these as much as possible - once this has been done fully, the graph of relations between PolyPaths and VertexPaths should hopefully be a topological representation of the scene (at which point the next step would have been to reverse-transform the vertex paths into a camera path, and then into 3D coordinates, but I didn't get that far).
+
+'Match poly' locates the polygon in the second set of listboxes which most closely matches the one selected in the first set, based on overlap in 2D space. 'Match frame polys' does this in bulk, for every pair of consecutive frames, and merges polyPaths where they match within a certain threshold.
+
+'Follow vertices' constructs VertexPaths by checking successive frame-polygons in a PolyPath, making a mapping between the closest-by-distance vertices in those polygons, and merging VertexPaths whenever this results in an unambiguous 1:1 mapping.
+
+'Merge vertex paths' finds VertexPaths that exactly coincide on at least 5 frames, and merges them.
+
+'Find vpaths by alias' merges VertexPaths by doing... something to do with their topological position relative to PolyPaths. You'd better look at the source code :-)
+
+'Snapshot' dumps the VertexPath / PolyPath data as JSON, for some reason I forget.
+
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
